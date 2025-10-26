@@ -1,0 +1,75 @@
+import asyncio
+import logging
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+import neo4j
+
+from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
+from neo4j_graphrag.llm import VertexAILLM
+from vertexai.generative_models import GenerationConfig
+
+from neo4j_graphrag.embeddings import OpenAIEmbeddings
+
+load_dotenv()
+
+logging.basicConfig()
+logging.getLogger("neo4j_graphrag").setLevel(logging.INFO)
+
+root_dir = Path(__file__).parents[2]
+PDF_FILE = "../../documents/okrs.pdf"
+
+
+async def run_kg_pipeline_with_auto_schema() -> None:
+    """Run the SimpleKGPipeline with automatic schema extraction from a PDF file."""
+
+    uri = os.getenv("NEO4J_URI", "neo4j://localhost:7687")
+    user = os.getenv("NEO4J_USER", "neo4j")
+    password = os.getenv("NEO4J_PASSWORD", "admin123")
+
+    generation_config = GenerationConfig(
+        temperature=0.0
+    )
+    driver = neo4j.GraphDatabase.driver(uri, auth=(user, password))
+
+    
+    llm = VertexAILLM(
+        model_name="gemini-2.5-flash",
+        generation_config=generation_config
+    )
+
+    embedder = OpenAIEmbeddings()
+
+    try:
+
+        kg_builder = SimpleKGPipeline(
+            llm=llm,
+            driver=driver,
+            embedder=embedder,
+            from_pdf=True,
+        )
+
+        print(f"Processing PDF file: {PDF_FILE}")
+        await kg_builder.run_async(file_path=PDF_FILE)
+
+    finally:
+        await llm.async_client.close()
+        driver.close()
+
+
+async def main() -> None:
+    """Run the example."""
+
+    data_dir = root_dir / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    if not Path(PDF_FILE).exists():
+        print(f"Warning: PDF file not found at {PDF_FILE}")
+        print("Please replace with a valid PDF file path.")
+        return
+
+    await run_kg_pipeline_with_auto_schema()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

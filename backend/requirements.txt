@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+neo4j
+neo4j-graphrag
+google-cloud-aiplatform
+google-generativeai
+openai
+websockets

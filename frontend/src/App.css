@@ -1,0 +1,168 @@
+.app {
+  min-height: 100vh;
+}
+
+header {
+  background: #1a1a1a;
+  padding: 1rem 2rem;
+  border-bottom: 2px solid #333;
+}
+
+header h1 {
+  margin: 0;
+  color: #fff;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.create-case {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.create-case input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.create-case button {
+  padding: 0.75rem 1.5rem;
+  background: #646cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.case-card {
+  padding: 1.5rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.case-card:hover {
+  transform: translateY(-2px);
+  border-color: #646cff;
+}
+
+.case-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #333;
+  margin-bottom: 2rem;
+}
+
+.tabs button {
+  padding: 0.75rem 1.5rem;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs button.active {
+  color: #646cff;
+  border-bottom-color: #646cff;
+}
+
+.file-upload {
+  max-width: 600px;
+}
+
+.file-upload input[type="file"] {
+  margin: 1rem 0;
+}
+
+.file-list {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.graph-view {
+  display: flex;
+  justify-content: center;
+  background: #0a0a0a;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.message {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.message.user {
+  background: #1a1a1a;
+  margin-left: 20%;
+}
+
+.message.assistant {
+  background: #0a2a3a;
+  margin-right: 20%;
+}
+
+.chat-input {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-top: 1px solid #333;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 3rem;
+  color: #888;
+}
