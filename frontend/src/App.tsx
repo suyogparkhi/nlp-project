@@ -1,31 +1,17 @@
-import { useState, useEffect } from 'react';
-import type { Case } from './types';
+import { useState } from 'react';
 import { api } from './api';
-import CaseList from './components/CaseList';
-import CaseView from './components/CaseView';
+import FileUpload from './components/FileUpload';
+import GraphView from './components/GraphView';
+import Chat from './components/Chat';
 import './App.css';
 
 function App() {
-  const [cases, setCases] = useState<Case[]>([]);
-  const [selectedCase, setSelectedCase] = useState<Case | null>(null);
-  const [newCaseName, setNewCaseName] = useState('');
+  const [activeTab, setActiveTab] = useState<'upload' | 'graph' | 'chat'>('upload');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useEffect(() => {
-    loadCases();
-  }, []);
-
-  const loadCases = async () => {
-    const data = await api.listCases();
-    setCases(data);
-  };
-
-  const handleCreateCase = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCaseName.trim()) return;
-
-    await api.createCase(newCaseName);
-    setNewCaseName('');
-    await loadCases();
+  const handleUpload = async (files: File[]) => {
+    await api.uploadDocuments(files);
+    setRefreshKey(prev => prev + 1);
   };
 
   return (
@@ -35,30 +21,32 @@ function App() {
       </header>
 
       <div className="container">
-        {!selectedCase ? (
-          <div className="cases-view">
-            <form onSubmit={handleCreateCase} className="create-case">
-              <input
-                type="text"
-                placeholder="New case name"
-                value={newCaseName}
-                onChange={(e) => setNewCaseName(e.target.value)}
-              />
-              <button type="submit">Create Case</button>
-            </form>
+        <div className="tabs">
+          <button
+            className={activeTab === 'upload' ? 'active' : ''}
+            onClick={() => setActiveTab('upload')}
+          >
+            Upload
+          </button>
+          <button
+            className={activeTab === 'graph' ? 'active' : ''}
+            onClick={() => setActiveTab('graph')}
+          >
+            Knowledge Graph
+          </button>
+          <button
+            className={activeTab === 'chat' ? 'active' : ''}
+            onClick={() => setActiveTab('chat')}
+          >
+            Chat
+          </button>
+        </div>
 
-            <CaseList
-              cases={cases}
-              onSelectCase={setSelectedCase}
-            />
-          </div>
-        ) : (
-          <CaseView
-            case={selectedCase}
-            onBack={() => setSelectedCase(null)}
-            onUpdate={loadCases}
-          />
-        )}
+        <div className="tab-content">
+          {activeTab === 'upload' && <FileUpload onUpload={handleUpload} />}
+          {activeTab === 'graph' && <GraphView key={refreshKey} />}
+          {activeTab === 'chat' && <Chat />}
+        </div>
       </div>
     </div>
   );

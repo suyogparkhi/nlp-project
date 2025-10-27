@@ -116,49 +116,44 @@ class GraphRAGService:
             else:
                 logger.info(f"Vector index '{index_name}' already exists")
     
-    async def process_document(self, file_path: str, case_id: str):
+    async def process_document(self, file_path: str):
         """Process a document and add it to the knowledge graph."""
         try:
-            logger.info(f"Processing document: {file_path} for case: {case_id}")
+            logger.info(f"Processing document: {file_path}")
             
             await self.kg_builder.run_async(file_path=file_path)
             
-            # Tag all nodes that don't have a case_id yet with this case_id
-            # This assumes nodes from this document were just created
+            # Tag all nodes with document path
             with self.driver.session() as session:
-                # Set case_id on all nodes that don't have one yet
+                # Set document_path on all nodes that don't have one yet
                 result = session.run(
                     """
                     MATCH (n)
-                    WHERE n.case_id IS NULL
-                    SET n.case_id = $case_id, n.document_path = $file_path
+                    WHERE n.document_path IS NULL
+                    SET n.document_path = $file_path
                     RETURN count(n) as updated_count
                     """,
-                    file_path=file_path,
-                    case_id=case_id
+                    file_path=file_path
                 )
                 record = result.single()
                 if record:
-                    logger.info(f"Tagged {record['updated_count']} nodes with case_id: {case_id}")
+                    logger.info(f"Tagged {record['updated_count']} nodes with document_path")
             
             logger.info(f"Document processed successfully: {file_path}")
         except Exception as e:
             logger.error(f"Error processing document {file_path}: {e}")
             raise
     
-    async def get_graph_data(self, case_id: str):
+    async def get_graph_data(self):
         """Get graph data for visualization."""
         with self.driver.session() as session:
             result = session.run(
                 """
                 MATCH (n)
-                WHERE n.case_id = $case_id
                 OPTIONAL MATCH (n)-[r]->(m)
-                WHERE m.case_id = $case_id
                 RETURN n, r, m
                 LIMIT 500
-                """,
-                case_id=case_id
+                """
             )
             
             nodes = {}
@@ -198,20 +193,14 @@ class GraphRAGService:
                 "edges": edges
             }
     
-    async def query_graph(self, user_query: str, case_id: str = None):
+    async def query_graph(self, user_query: str):
         """Query the knowledge graph using VectorRetriever and GraphRAG."""
         try:
-            # If case_id is provided, add it to the query context
-            if case_id:
-                enhanced_query = f"For case {case_id}: {user_query}"
-            else:
-                enhanced_query = user_query
-            
-            logger.info(f"🔹 Query: {enhanced_query}")
+            logger.info(f"🔹 Query: {user_query}")
             
             # Use GraphRAG search (synchronous)
             response = self.rag.search(
-                query_text=enhanced_query,
+                query_text=user_query,
                 retriever_config={"top_k": 5}
             )
             

@@ -1,7 +1,6 @@
-export interface Case {
-  id: string;
+export interface DocumentInfo {
   name: string;
-  document_count: number;
+  size: number;
 }
 
 export interface GraphNode {

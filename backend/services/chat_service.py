@@ -10,7 +10,6 @@ class ChatService:
     async def chat_stream(
         self, 
         message: str, 
-        case_id: str, 
         graphrag_service
     ) -> AsyncGenerator[str, None]:
         """Stream chat responses using GraphRAG with VectorRetriever."""
@@ -19,7 +18,7 @@ class ChatService:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: graphrag_service.query_graph(message, case_id)
+                lambda: graphrag_service.query_graph(message)
             )
             
             # GraphRAG returns a response object with .answer attribute

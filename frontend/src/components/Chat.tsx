@@ -2,11 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
 import type { ChatMessage } from '../types';
 
-interface Props {
-    caseId: string;
-}
-
-export default function Chat({ caseId }: Props) {
+export default function Chat() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [ws, setWs] = useState<WebSocket | null>(null);
@@ -14,7 +10,7 @@ export default function Chat({ caseId }: Props) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const websocket = api.createChatWebSocket(caseId);
+        const websocket = api.createChatWebSocket();
 
         websocket.onopen = () => console.log('WebSocket connected');
 
@@ -37,7 +33,7 @@ export default function Chat({ caseId }: Props) {
         setWs(websocket);
 
         return () => websocket.close();
-    }, [caseId]);
+    }, []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

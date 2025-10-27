@@ -1,31 +1,26 @@
 import axios from 'axios';
-import type { Case, GraphData } from './types';
+import type { GraphData, DocumentInfo } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
 export const api = {
-  async createCase(name: string): Promise<Case> {
-    const response = await axios.post(`${API_BASE}/cases`, { name });
+  async listDocuments(): Promise<{ documents: DocumentInfo[]; count: number }> {
+    const response = await axios.get(`${API_BASE}/documents`);
     return response.data;
   },
 
-  async listCases(): Promise<Case[]> {
-    const response = await axios.get(`${API_BASE}/cases`);
-    return response.data;
-  },
-
-  async uploadDocuments(caseId: string, files: File[]): Promise<void> {
+  async uploadDocuments(files: File[]): Promise<void> {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
-    await axios.post(`${API_BASE}/cases/${caseId}/upload`, formData);
+    await axios.post(`${API_BASE}/upload`, formData);
   },
 
-  async getGraphData(caseId: string): Promise<GraphData> {
-    const response = await axios.get(`${API_BASE}/cases/${caseId}/graph`);
+  async getGraphData(): Promise<GraphData> {
+    const response = await axios.get(`${API_BASE}/graph`);
     return response.data;
   },
 
-  createChatWebSocket(caseId: string): WebSocket {
-    return new WebSocket(`ws://localhost:8000/ws/chat/${caseId}`);
+  createChatWebSocket(): WebSocket {
+    return new WebSocket(`ws://localhost:8000/ws/chat`);
   }
 };

@@ -3,22 +3,18 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { api } from '../api';
 import type { GraphData } from '../types';
 
-interface Props {
-    caseId: string;
-}
-
-export default function GraphView({ caseId }: Props) {
+export default function GraphView() {
     const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadGraph();
-    }, [caseId]);
+    }, []);
 
     const loadGraph = async () => {
         setLoading(true);
         try {
-            const data = await api.getGraphData(caseId);
+            const data = await api.getGraphData();
             setGraphData(data);
         } catch (error) {
             console.error('Failed to load graph:', error);
