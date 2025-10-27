@@ -74,8 +74,8 @@ class GraphRAGService:
             from_pdf=True,
         )
         
-        # Create vector index if it doesn't exist
-        index_name = os.getenv("NEO4J_INDEX_NAME", "entity-embeddings")
+        # Create vector index if it doesn't exist (defaults to chunk embeddings)
+        index_name = os.getenv("NEO4J_INDEX_NAME", "chunk-embeddings")
         await self._ensure_vector_index(index_name)
         
         # Initialize retriever with vector index
@@ -91,30 +91,97 @@ class GraphRAGService:
         logger.info("GraphRAG service initialized")
     
     async def _ensure_vector_index(self, index_name: str):
-        """Create vector index if it doesn't exist."""
+        """Ensure the vector index exists with correct label/property and dimensions.
+        Detects the label carrying the 'embedding' property (prefers __Chunk__).
+        If an index with the same name exists but mismatches, it is dropped and recreated.
+        """
         with self.driver.session() as session:
-            # Check if index exists
-            result = session.run("SHOW INDEXES")
-            existing_indexes = [record["name"] for record in result]
-            
-            if index_name not in existing_indexes:
-                logger.info(f"Creating vector index: {index_name}")
-                # Create vector index on __Entity__ nodes with embedding property
-                # Dimension 3072 for text-embedding-3-large
-                session.run(f"""
+            # Detect label and embedding dimension
+            label, dimension = self._detect_embedding_schema(session)
+            if label is None:
+                # Fallback to common defaults for neo4j-graphrag chunks
+                label = "__Chunk__"
+            if dimension is None:
+                # OpenAI text-embedding-3-large default
+                dimension = 3072
+
+            logger.info(f"Embedding schema resolved: label={label}, property=embedding, dim={dimension}")
+
+            # Inspect existing index with this name
+            info = session.run(
+                """
+                SHOW INDEXES YIELD name, type, labelsOrTypes, properties, state
+                WHERE name = $name
+                RETURN name, type, labelsOrTypes, properties, state
+                """,
+                name=index_name,
+            ).single()
+
+            needs_create = False
+            if info is None:
+                needs_create = True
+            else:
+                idx_type = info["type"]
+                idx_labels = info["labelsOrTypes"] or []
+                idx_props = info["properties"] or []
+                # Validate type, label and property
+                if idx_type != "VECTOR" or "embedding" not in idx_props or label not in idx_labels:
+                    logger.info(
+                        f"Existing index '{index_name}' mismatched (type={idx_type}, labels={idx_labels}, props={idx_props}). Recreating."
+                    )
+                    session.run(f"DROP INDEX `{index_name}` IF EXISTS")
+                    needs_create = True
+
+            if needs_create:
+                logger.info(f"Creating vector index '{index_name}' on :{label}(embedding) with dim={dimension}")
+                session.run(
+                    f"""
                     CREATE VECTOR INDEX `{index_name}` IF NOT EXISTS
-                    FOR (n:__Entity__)
-                    ON n.embedding
+                    FOR (n:{label})
+                    ON (n.embedding)
                     OPTIONS {{
                         indexConfig: {{
-                            `vector.dimensions`: 3072,
+                            `vector.dimensions`: {dimension},
                             `vector.similarity_function`: 'cosine'
                         }}
                     }}
-                """)
+                    """
+                )
                 logger.info(f"Vector index '{index_name}' created successfully")
             else:
-                logger.info(f"Vector index '{index_name}' already exists")
+                logger.info(f"Vector index '{index_name}' already exists and matches schema")
+
+    def _detect_embedding_schema(self, session):
+        """Detect the label and embedding dimension from existing nodes.
+        Prefers __Chunk__ if available. Returns (label, dimension) or (None, None).
+        """
+        try:
+            # Prefer chunks
+            rec = session.run(
+                """
+                MATCH (n:__Chunk__)
+                WHERE n.embedding IS NOT NULL
+                RETURN '__Chunk__' AS label, size(n.embedding) AS dim
+                LIMIT 1
+                """
+            ).single()
+            if rec and rec["dim"] is not None:
+                return rec["label"], rec["dim"]
+
+            # Fallback: any node with embedding
+            rec = session.run(
+                """
+                MATCH (n)
+                WHERE n.embedding IS NOT NULL
+                RETURN labels(n)[0] AS label, size(n.embedding) AS dim
+                LIMIT 1
+                """
+            ).single()
+            if rec and rec["label"]:
+                return rec["label"], rec["dim"]
+        except Exception as e:
+            logger.warning(f"Embedding schema detection failed: {e}")
+        return None, None
     
     async def process_document(self, file_path: str):
         """Process a document and add it to the knowledge graph."""
