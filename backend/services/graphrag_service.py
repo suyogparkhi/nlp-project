@@ -193,7 +193,7 @@ class GraphRAGService:
                 "edges": edges
             }
     
-    async def query_graph(self, user_query: str):
+    def query_graph(self, user_query: str):
         """Query the knowledge graph using VectorRetriever and GraphRAG."""
         try:
             logger.info(f"🔹 Query: {user_query}")
