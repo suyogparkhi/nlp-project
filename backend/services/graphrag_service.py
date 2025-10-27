@@ -6,6 +6,8 @@ from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
 from neo4j_graphrag.llm import VertexAILLM
 from vertexai.generative_models import GenerationConfig
 from neo4j_graphrag.embeddings import OpenAIEmbeddings
+from neo4j_graphrag.retrievers import VectorRetriever
+from neo4j_graphrag.generation import GraphRAG
 
 from dotenv import load_dotenv
 
@@ -20,6 +22,8 @@ class GraphRAGService:
         self.llm = None
         self.embedder = None
         self.kg_builder = None
+        self.rag = None
+        self.retriever = None
     
     async def initialize(self):
         """Initialize Neo4j connection and GraphRAG components."""
@@ -34,15 +38,6 @@ class GraphRAGService:
         if credentials_path:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
         
-        generation_config = GenerationConfig(
-            temperature=0.2,
-            response_mime_type="application/json"
-        )
-        self.llm = VertexAILLM(
-            model_name="gemini-2.5-flash",
-            generation_config=generation_config
-        )
-        
         # Initialize OpenAI embeddings (uses OPENAI_API_KEY from environment)
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
@@ -51,16 +46,75 @@ class GraphRAGService:
         # Set the API key in environment for OpenAI client
         os.environ["OPENAI_API_KEY"] = openai_api_key
         
-        self.embedder = OpenAIEmbeddings()
+        self.embedder = OpenAIEmbeddings(model="text-embedding-3-large")
+        
+        # Initialize LLM for both ingestion and retrieval
+        generation_config = GenerationConfig(
+            temperature=0.0,
+        )
+        self.llm = VertexAILLM(
+            model_name="gemini-2.5-flash",
+            generation_config=generation_config
+        )
+        
+        # Initialize KG builder for document ingestion
+        kg_generation_config = GenerationConfig(
+            temperature=0.2,
+            response_mime_type="application/json"
+        )
+        kg_llm = VertexAILLM(
+            model_name="gemini-2.5-flash",
+            generation_config=kg_generation_config
+        )
         
         self.kg_builder = SimpleKGPipeline(
-            llm=self.llm,
+            llm=kg_llm,
             driver=self.driver,
             embedder=self.embedder,
             from_pdf=True,
         )
         
+        # Create vector index if it doesn't exist
+        index_name = os.getenv("NEO4J_INDEX_NAME", "entity-embeddings")
+        await self._ensure_vector_index(index_name)
+        
+        # Initialize retriever with vector index
+        self.retriever = VectorRetriever(
+            driver=self.driver,
+            index_name=index_name,
+            embedder=self.embedder
+        )
+        
+        # Initialize GraphRAG pipeline (combines retriever + llm)
+        self.rag = GraphRAG(retriever=self.retriever, llm=self.llm)
+        
         logger.info("GraphRAG service initialized")
+    
+    async def _ensure_vector_index(self, index_name: str):
+        """Create vector index if it doesn't exist."""
+        with self.driver.session() as session:
+            # Check if index exists
+            result = session.run("SHOW INDEXES")
+            existing_indexes = [record["name"] for record in result]
+            
+            if index_name not in existing_indexes:
+                logger.info(f"Creating vector index: {index_name}")
+                # Create vector index on __Entity__ nodes with embedding property
+                # Dimension 3072 for text-embedding-3-large
+                session.run(f"""
+                    CREATE VECTOR INDEX `{index_name}` IF NOT EXISTS
+                    FOR (n:__Entity__)
+                    ON n.embedding
+                    OPTIONS {{
+                        indexConfig: {{
+                            `vector.dimensions`: 3072,
+                            `vector.similarity_function`: 'cosine'
+                        }}
+                    }}
+                """)
+                logger.info(f"Vector index '{index_name}' created successfully")
+            else:
+                logger.info(f"Vector index '{index_name}' already exists")
     
     async def process_document(self, file_path: str, case_id: str):
         """Process a document and add it to the knowledge graph."""
@@ -144,29 +198,30 @@ class GraphRAGService:
                 "edges": edges
             }
     
-    async def search_context(self, query: str, case_id: str) -> str:
-        """Search for relevant context in the knowledge graph."""
-        with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH (n)
-                WHERE n.case_id = $case_id 
-                AND (n.text CONTAINS $search_query OR n.name CONTAINS $search_query)
-                RETURN n.text as text, n.name as name
-                LIMIT 5
-                """,
-                case_id=case_id,
-                search_query=query
+    async def query_graph(self, user_query: str, case_id: str = None):
+        """Query the knowledge graph using VectorRetriever and GraphRAG."""
+        try:
+            # If case_id is provided, add it to the query context
+            if case_id:
+                enhanced_query = f"For case {case_id}: {user_query}"
+            else:
+                enhanced_query = user_query
+            
+            logger.info(f"🔹 Query: {enhanced_query}")
+            
+            # Use GraphRAG search (synchronous)
+            response = self.rag.search(
+                query_text=enhanced_query,
+                retriever_config={"top_k": 5}
             )
             
-            context_parts = []
-            for record in result:
-                if record["text"]:
-                    context_parts.append(record["text"])
-                elif record["name"]:
-                    context_parts.append(record["name"])
+            logger.info(f"🔹 Answer: {response.answer}")
+            logger.info(f"🔹 Context items: {len(response.items) if hasattr(response, 'items') else 'N/A'}")
             
-            return "\n\n".join(context_parts) if context_parts else "No relevant context found."
+            return response
+        except Exception as e:
+            logger.error(f"Error querying graph: {e}")
+            raise
     
     async def close(self):
         """Close connections."""

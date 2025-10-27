@@ -1,5 +1,8 @@
 .app {
   min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 header {
@@ -14,6 +17,8 @@ header h1 {
 }
 
 .container {
+  flex: 1;
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
@@ -112,12 +117,15 @@ header h1 {
   background: #0a0a0a;
   border-radius: 8px;
   padding: 1rem;
+  min-height: 600px;
+  width: 100%;
 }
 
 .chat {
   display: flex;
   flex-direction: column;
-  height: 600px;
+  height: calc(100vh - 250px);
+  min-height: 500px;
   border: 1px solid #333;
   border-radius: 8px;
   overflow: hidden;
@@ -165,4 +173,12 @@ header h1 {
   text-align: center;
   padding: 3rem;
   color: #888;
+}
+
+.case-view {
+  width: 100%;
+}
+
+.tab-content {
+  width: 100%;
 }
