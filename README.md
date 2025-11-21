@@ -27,6 +27,12 @@ A document management system for lawyers with GraphRAG capabilities, allowing bu
    - OpenAI API key for embeddings
 
 ## Setup
+### Clone the repository
+
+```bash
+git clone https://github.com/suyogparkhi/nlp-project.git
+cd nlp-project
+```
 
 ### Backend
 
@@ -86,3 +92,137 @@ npm run dev
 - `POST /cases/{case_id}/upload` - Upload documents
 - `GET /cases/{case_id}/graph` - Get graph data
 - `WS /ws/chat/{case_id}` - WebSocket chat endpoint
+
+---
+
+## Environment variables
+
+If `.env.example` is not present, create a `.env` file in `backend/` with the following keys:
+
+```env
+NEO4J_URI=neo4j://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=admin123
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=AI...
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/google-credentials.json
+NEO4J_INDEX_NAME=chunk-embeddings
+```
+
+See `QUICKSTART.md` for a more guided setup.
+
+## Datasets, models, and preprocessing
+
+- **Dataset**: This app operates on user-provided legal documents. No fixed public dataset is bundled. For testing, sample PDFs exist under `backend/uploads/test/`.
+- **Preprocessing**:
+  - PDFs and text files are chunked and parsed by `neo4j-graphrag`’s `SimpleKGPipeline`.
+  - Chunks are embedded with OpenAI `text-embedding-3-large` (dimension 3072) and written into Neo4j.
+  - A knowledge graph is generated (entities/relations) and nodes tagged with `document_path`.
+- **Models/Services**:
+  - Embeddings: OpenAI `text-embedding-3-large` (requires `OPENAI_API_KEY`).
+  - LLM: Vertex AI Gemini (configured via Google Cloud credentials).
+  - Vector index: Created in Neo4j on the embedding property (default name `chunk-embeddings`).
+
+No model files are downloaded locally; cloud APIs are used. Ensure API keys/credentials are set before running.
+
+## Repository structure
+
+```text
+nlp-project/
+  backend/
+    main.py                  # FastAPI app (upload, graph, WebSocket chat)
+    models.py
+    requirements.txt
+    services/
+      chat_service.py        # Streaming chat using GraphRAG
+      graphrag_service.py    # Neo4j + embeddings + KG pipeline + retriever
+    uploads/
+      test/                  # Sample documents for local testing
+    upgrade_deps.sh
+  frontend/
+    package.json
+    src/
+      api.ts                 # API wrappers
+      components/            # Chat, FileUpload, GraphView
+      App.tsx, main.tsx, ... # React app
+  QUICKSTART.md              # Step-by-step setup and troubleshooting
+  README.md                  # This file
+```
+
+## Examples
+
+### Example input
+- Upload a PDF such as `backend/uploads/test/Modify Itinerary.pdf` via the UI (Frontend → Upload), or with API:
+  ```bash
+  curl -F "files=@backend/uploads/test/Modify Itinerary.pdf" http://localhost:8000/upload
+  ```
+
+### Example output (graph data)
+`GET http://localhost:8000/graph` returns a lightweight graph snapshot for visualization:
+
+```json
+{
+  "nodes": [
+    { "id": "node-1", "label": "Booking", "type": "__Chunk__" }
+    // ...
+  ],
+  "edges": [
+    { "source": "node-1", "target": "node-2", "label": "REFERS_TO" }
+    // ...
+  ]
+}
+```
+
+### Example chat
+Connect from the frontend or a WebSocket client to `ws://localhost:8000/ws/chat` and send:
+```
+What is the refund policy mentioned in the itinerary?
+```
+You will receive a streamed textual answer grounded on the retrieved chunks/graph context.
+
+## Diagram
+
+```mermaid
+flowchart LR
+  A[React + Vite (Frontend)] -- REST/WS --> B[FastAPI Backend]
+  B -- Neo4j driver --> C[(Neo4j)]
+  B -- Embeddings --> D[OpenAI API]
+  B -- LLM (chat + KG) --> E[Vertex AI Gemini]
+  subgraph Local
+    A
+    B
+    C
+  end
+```
+
+## Technologies used
+
+- **Languages**: Python, TypeScript
+- **Backend**: FastAPI, WebSockets, python-dotenv
+- **GraphRAG / Graph**: neo4j, neo4j-graphrag
+- **LLM**: google-cloud-aiplatform, google-generativeai (Vertex AI Gemini)
+- **Embeddings**: openai (text-embedding-3-large)
+- **Frontend**: React, Vite, TypeScript
+- **Infra/Tools**: Neo4j Desktop/Server, Node.js, npm
+
+## Run locally (TL;DR)
+
+```bash
+# 1) Neo4j
+# Install and run Neo4j locally, set password to admin123 (or update .env)
+
+# 2) Backend
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+# Create backend/.env (see Environment variables section)
+python main.py
+
+# 3) Frontend
+cd ../frontend
+npm install
+npm run dev
+
+# Open the app
+# http://localhost:5173
+```
